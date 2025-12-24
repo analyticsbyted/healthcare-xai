@@ -1,60 +1,56 @@
 import pandas as pd
 import numpy as np
-import shap
 import matplotlib.pyplot as plt
-from sklearn.datasets import load_breast_cancer
+import shap
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
-import warnings
+from sklearn.datasets import load_breast_cancer
 
-warnings.filterwarnings('ignore')
+# 1. Load Dataset (Wisconsin Diagnostic)
+data = load_breast_cancer()
+X = pd.DataFrame(data.data, columns=data.feature_names)
+y = data.target
 
-def run_healthcare_xai():
-    print("--- [1/4] Loading Healthcare Dataset (Breast Cancer Wisconsin) ---")
-    data = load_breast_cancer()
-    X = pd.DataFrame(data.data, columns=data.feature_names)
-    y = data.target
-    
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    print("\n--- [2/4] Training Interpreted Model (Random Forest) ---")
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-    
-    # Quick check on performance
-    y_pred = model.predict(X_test)
-    print("\nModel Performance:")
-    print(classification_report(y_test, y_pred, target_names=data.target_names))
-    
-    print("\n--- [3/4] Initializing SHAP Explainer (Explaining Clinical Predictions) ---")
-    explainer = shap.TreeExplainer(model)
-    # Get explanation object which is more modern
-    explanation = explainer(X_test)
-    
-    print("\n--- [4/4] Generating Interpretability Visualizations ---")
-    
-    # For binary classification, explanation has shape (N, D, 2)
-    # We want class 0 (Malignant) to explain risk factors
-    # or class 1 (Benign). Usually index 0 in this dataset is Malignant.
-    
-    plt.figure(figsize=(12, 8))
-    # explanation[:, :, 0] explains the 'malignant' class
-    shap.plots.beeswarm(explanation[:, :, 0], show=False)
-    plt.title("SHAP Summary: Drivers of Malignant Classification", fontsize=14)
-    plt.tight_layout()
-    plt.savefig('healthcare_xai_summary.png', dpi=300)
-    print("Summary plot saved: healthcare_xai_summary.png")
-    
-    # Individual explanation
-    patient_idx = 10
-    plt.figure(figsize=(12, 4))
-    shap.plots.waterfall(explanation[patient_idx, :, 0], show=False)
-    plt.title(f"Patient {patient_idx} Interpretability Profile", fontsize=14)
-    plt.tight_layout()
-    plt.savefig('patient_explanation.png', dpi=300)
-    print("Patient-level explanation saved: patient_explanation.png")
+# 2. Train-Test Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-if __name__ == "__main__":
-    run_healthcare_xai()
+# 3. Model Training (Random Forest)
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# 4. Explainability (SHAP)
+# Using Explainer for the model
+explainer = shap.Explainer(model)
+shap_values = explainer(X_test)
+
+# For binary classification, slice for class 1 (Malignant in this context, or typically the target of interest)
+# Some versions of SHAP return (N, M, 2) values
+if len(shap_values.values.shape) == 3:
+    shap_val_output = shap_values[:, :, 1]
+else:
+    shap_val_output = shap_values
+
+# 5. Visualizations
+plt.style.use('dark_background')
+
+# Create a composite figure (Tall and Slim for 'scroll' effect)
+fig = plt.figure(figsize=(10, 20), constrained_layout=True)
+gs = fig.add_gridspec(2, 1)
+
+# Panel 1: Global Summary (Beeswarm)
+ax1 = fig.add_subplot(gs[0])
+plt.sca(ax1)
+shap.plots.beeswarm(shap_val_output, show=False)
+plt.title("Global Clinical Drivers (Beeswarm Analysis)", fontsize=18, pad=30, color='#00d1ff')
+
+# Panel 2: Local Patient Explanation (Waterfall)
+ax2 = fig.add_subplot(gs[1])
+plt.sca(ax2)
+patient_idx = 10 
+shap.plots.waterfall(shap_val_output[patient_idx], show=False)
+plt.title(f"Patient ID: 10 - Diagnostic Attribution (Waterfall)", fontsize=18, pad=30, color='#ff00ff')
+
+# Save the full composite image
+plt.savefig("/Volumes/Samsung 990 Pro/dev/healthcare-xai/healthcare_xai_full_scroll.png", dpi=300, bbox_inches='tight')
+
+print("✅ Visualization composite generated: healthcare_xai_full_scroll.png")
