@@ -46,3 +46,9 @@ The integration of SHAP values into clinical workflows allows for:
 
 ---
 © 2025 Ted Dickey Research | Analytics for Clinical Trust (ACT)
+
+## 📊 R-Based Supplemental Analysis
+A supplemental report built in **R-Markdown** is available in this repository: `xai_report.Rmd`.
+- **Framework**: DALEX (Descriptive mAchine Learning Explanations).
+- **Objective**: Demonstrates cross-platform verification of clinical feature importance.
+- **Usage**: Open `xai_report.Rmd` in RStudio and click "Knit" to generate the full HTML research report. This report is optimized for publication on **RPubs**.

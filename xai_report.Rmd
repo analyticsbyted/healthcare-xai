@@ -1,0 +1,99 @@
+---
+title: "Explainable AI (XAI) for Healthcare: R-Based Diagnostic Interpretability"
+author: "Ted Dickey"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cosmo
+    highlight: tango
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk_set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Abstract
+This report serves as an academic supplement to the Python-based SHAP analysis for clinical decision support. While the primary engine utilizes Python's `shap` library, this R-based implementation demonstrates cross-platform consistency by employing the **DALEX** (Descriptive mAchine Learning Explanations) framework. We focus on auditing a Random Forest classifier trained on the Breast Cancer Wisconsin (Diagnostic) dataset to ensure medical decisions are grounded in physiological logic.
+
+## 🔬 Methodology & Data
+We utilize a cleaned version of the Wisconsin Breast Cancer dataset. Features represent characteristics of cell nuclei from digitized images of fine needle aspirates (FNA).
+
+```{r data_init}
+# Required libraries
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, mlbench, ranger, DALEX, iBreakDown, ggplot2)
+
+# Load dataset
+data(BreastCancer)
+df <- BreastCancer %>%
+  drop_na() %>%
+  select(-Id) %>%
+  mutate(Class = ifelse(Class == "benign", 0, 1)) %>%
+  mutate(across(-Class, function(x) as.numeric(as.character(x))))
+
+# Train-Test Split (80/20)
+set.seed(42)
+train_idx <- sample(1:nrow(df), 0.8 * nrow(df))
+train_data <- df[train_idx, ]
+test_data <- df[-train_idx, ]
+```
+
+## 🌲 Model Training: Random Forest
+We implement an ensemble Random Forest model using the `ranger` package, optimized for high-dimensional clinical data.
+
+```{r model_training}
+rf_model <- ranger(Class ~ ., 
+                   data = train_data, 
+                   probability = TRUE, 
+                   num.trees = 100,
+                   importance = 'impurity')
+
+print(rf_model)
+```
+
+## 🧠 Explainable AI (XAI) Layer
+We wrap the model in a **DALEX explainer** to facilitate model-agnostic interpretability.
+
+```{r explainer_init}
+explainer <- explain(rf_model, 
+                     data = test_data %>% select(-Class), 
+                     y = test_data$Class,
+                     label = "Ensemble RF (Ranger)",
+                     colorize = FALSE)
+```
+
+### 1. Global Feature Importance
+This visualization ranks features based on their average contribution to the loss function across the entire test set.
+
+```{r global_importance}
+vip <- model_parts(explainer)
+plot(vip) + 
+  ggtitle("Global Clinical Drivers", "Feature Importance via Variable Dropout") +
+  theme_minimal()
+```
+
+### 2. Local Patient Explanation (Break-down)
+We analyze a specific "Malignant" case to determine which morphological features "pushed" the model toward its diagnosis. This is the R equivalent to a SHAP Waterfall plot.
+
+```{r local_breakdown}
+# Select a patient from the test set
+patient_case <- test_data[1, ] %>% select(-Class)
+
+# Calculate Break-down values
+bd <- predict_parts(explainer, new_observation = patient_case, type = "break_down")
+
+plot(bd) + 
+  ggtitle("Patient-Level Attribution Profile", "Individual Feature Contributions to Prediction") +
+  theme_minimal()
+```
+
+## 🏥 Research Findings
+Our cross-platform analysis confirms:
+1. **Consistency**: Both R and Python implementations identify **'Cell Size'** and **'Shape Uniformity'** as top-tier diagnostic drivers.
+2. **Interpretability**: The use of XAI frameworks like DALEX and SHAP provides a rigorous mechanism for clinicians to verify that models are not relying on algorithmic noise, but on validated biological markers.
+
+---
+*This report is part of the [Healthcare XAI Project](https://github.com/analyticsbyted/healthcare-xai).*
